@@ -5,5 +5,9 @@
 #' @importFrom dplyr %>%
 #' @importFrom foreach %:%
 #' @importFrom foreach %do%
+#' @importFrom Rcpp sourceCpp
+#' @importFrom stats cov
+#' @importFrom stats na.omit
+#' @useDynLib pintervals, .registration = TRUE
 ## usethis namespace: end
 NULL

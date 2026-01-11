@@ -4,20 +4,51 @@
 \alias{bootstrap_inner}
 \title{Bootstrap function for bootstrapping the prediction intervals}
 \usage{
-bootstrap_inner(pred, error, nboot, alpha, lower_bound, upper_bound)
+bootstrap_inner(
+  pred,
+  calib,
+  error,
+  nboot,
+  alpha,
+  dw_bootstrap = FALSE,
+  distance_function = NULL,
+  error_type = c("raw", "absolute"),
+  distance_weighted_bootstrap = FALSE,
+  distance_features_calib = NULL,
+  distance_features_pred = NULL,
+  distance_type = c("mahalanobis", "euclidean"),
+  normalize_distance = c("minmax", "sd", "none"),
+  weight_function = gauss_kern
+)
 }
 \arguments{
 \item{pred}{predicted value}
 
-\item{error}{vector of errors}
+\item{calib}{a vector of true values of the calibration partition. Used when weighted_bootstrap is TRUE}
+
+\item{error}{vector of errors.}
 
 \item{nboot}{number of bootstrap samples}
 
 \item{alpha}{confidence level}
 
-\item{lower_bound}{lower bound of the prediction interval}
+\item{dw_bootstrap}{logical. If TRUE, the bootstrap samples will be weighted according to the distance function}
 
-\item{upper_bound}{upper bound of the prediction interval}
+\item{distance_function}{a function that takes two numeric vectors and returns a numeric vector of distances. Default is NULL, in which case the absolute error will be used}
+
+\item{error_type}{The type of error to use for the prediction intervals. Can be 'raw' or 'absolute'. If 'raw', bootstrapping will be done on the raw prediction errors. If 'absolute', bootstrapping will be done on the absolute prediction errors with random signs. Default is 'raw'}
+
+\item{distance_weighted_bootstrap}{logical. If TRUE, the bootstrap samples will be weighted according to the distance function}
+
+\item{distance_features_calib}{a matrix of features for the calibration partition. Used when distance_weighted_bootstrap is TRUE}
+
+\item{distance_features_pred}{a matrix of features for the prediction partition. Used when distance_weighted_bootstrap is TRUE}
+
+\item{distance_type}{The type of distance metric to use when computing distances between calibration and prediction points. Options are 'mahalanobis' (default) and 'euclidean'.}
+
+\item{normalize_distance}{Either "none", "minmax", or "sd". Indicates how to normalize the distances when distance_weighted_bootstrap is TRUE}
+
+\item{weight_function}{a function to use for weighting the distances. Can be 'gaussian_kernel', 'caucy_kernel', 'logistic', or 'reciprocal_linear'. Default is 'gaussian_kernel'}
 }
 \value{
 a numeric vector with the predicted value and the lower and upper bounds of the prediction interval
