@@ -1,4 +1,4 @@
-#' Empirical coverage of prediction intervals
+#' Empirical Coverage of Prediction Intervals
 #'
 #' @description Calculates the mean empirical coverage rate of prediction intervals, i.e., the proportion of true values that fall within their corresponding prediction intervals.
 #'
@@ -61,6 +61,38 @@ interval_coverage <- function(
 	return_vector = FALSE,
 	na.rm = FALSE
 ) {
+	# Check: if both lower_bound/upper_bound and intervals are all NULL
+	if (is.null(intervals) && (is.null(lower_bound) || is.null(upper_bound))) {
+		stop(
+			"interval_coverage: Either 'intervals' or both 'lower_bound' and 'upper_bound' must be provided.",
+			call. = FALSE
+		)
+	}
+
+	# Check: truth must be numeric
+	if (!is.numeric(truth)) {
+		stop("interval_coverage: 'truth' must be numeric.", call. = FALSE)
+	}
+
+	# Check: when lower_bound and upper_bound are provided, they must be numeric and same length as truth
+	if (!is.null(lower_bound) && !is.null(upper_bound)) {
+		if (!is.numeric(lower_bound)) {
+			stop("interval_coverage: 'lower_bound' must be numeric.", call. = FALSE)
+		}
+		if (!is.numeric(upper_bound)) {
+			stop("interval_coverage: 'upper_bound' must be numeric.", call. = FALSE)
+		}
+		if (
+			length(lower_bound) != length(truth) ||
+				length(upper_bound) != length(truth)
+		) {
+			stop(
+				"interval_coverage: 'lower_bound' and 'upper_bound' must have the same length as 'truth'.",
+				call. = FALSE
+			)
+		}
+	}
+
 	if (!is.null(intervals)) {
 		intervals_idx <- which(purrr::map_lgl(intervals, ~ !is.null(.x)))
 		covered_interval <- foreach::foreach(i = intervals_idx) %do%
@@ -102,7 +134,7 @@ cover <- function(truth, intervals) {
 	return(max(covered))
 }
 
-#' Empirical miscoverage of prediction intervals
+#' Empirical Miscoverage of Prediction Intervals
 #'
 #' @description Calculates the empirical miscoverage rate of prediction intervals, i.e., the difference between proportion of true values that fall within their corresponding prediction intervals and the nominal coverage rate (1 - alpha).
 #'
@@ -163,11 +195,37 @@ interval_miscoverage <- function(
 	alpha,
 	na.rm = FALSE
 ) {
+	# Check: truth must be numeric
+	if (!is.numeric(truth)) {
+		stop("interval_miscoverage: 'truth' must be numeric.", call. = FALSE)
+	}
+
+	# Check: lower_bound must be numeric
+	if (!is.numeric(lower_bound)) {
+		stop("interval_miscoverage: 'lower_bound' must be numeric.", call. = FALSE)
+	}
+
+	# Check: upper_bound must be numeric
+	if (!is.numeric(upper_bound)) {
+		stop("interval_miscoverage: 'upper_bound' must be numeric.", call. = FALSE)
+	}
+
+	# Check: alpha must be single numeric in (0,1)
+	if (!is.numeric(alpha) || length(alpha) != 1 || alpha <= 0 || alpha >= 1) {
+		stop(
+			"interval_miscoverage: 'alpha' must be a single numeric value in (0, 1).",
+			call. = FALSE
+		)
+	}
+
 	# Check if the lengths of the vectors are equal
 	if (
 		length(truth) != length(lower_bound) || length(truth) != length(upper_bound)
 	) {
-		stop("All input vectors must have the same length.")
+		stop(
+			"interval_miscoverage: All input vectors must have the same length.",
+			call. = FALSE
+		)
 	}
 
 	# Calculate empirical coverage
@@ -177,7 +235,7 @@ interval_miscoverage <- function(
 	return(mean(covered, na.rm = na.rm) - (1 - alpha))
 }
 
-#' Mean interval score (MIS) for prediction intervals
+#' Mean Interval Score (MIS) for Prediction Intervals
 #'
 #' @description Computes the mean interval score, a proper scoring rule that penalizes both the width of prediction intervals and any lack of coverage. Lower values indicate better interval quality.
 #' @param truth A numeric vector of true outcome values.
@@ -247,6 +305,46 @@ interval_score <- function(
 	alpha,
 	na.rm = FALSE
 ) {
+	# Check: if both lower_bound/upper_bound and intervals are all NULL
+	if (is.null(intervals) && (is.null(lower_bound) || is.null(upper_bound))) {
+		stop(
+			"interval_score: Either 'intervals' or both 'lower_bound' and 'upper_bound' must be provided.",
+			call. = FALSE
+		)
+	}
+
+	# Check: truth must be numeric
+	if (!is.numeric(truth)) {
+		stop("interval_score: 'truth' must be numeric.", call. = FALSE)
+	}
+
+	# Check: alpha must be single numeric in (0,1)
+	if (!is.numeric(alpha) || length(alpha) != 1 || alpha <= 0 || alpha >= 1) {
+		stop(
+			"interval_score: 'alpha' must be a single numeric value in (0, 1).",
+			call. = FALSE
+		)
+	}
+
+	# Check: when lower_bound and upper_bound are provided, they must be numeric and same length as truth
+	if (!is.null(lower_bound) && !is.null(upper_bound)) {
+		if (!is.numeric(lower_bound)) {
+			stop("interval_score: 'lower_bound' must be numeric.", call. = FALSE)
+		}
+		if (!is.numeric(upper_bound)) {
+			stop("interval_score: 'upper_bound' must be numeric.", call. = FALSE)
+		}
+		if (
+			length(lower_bound) != length(truth) ||
+				length(upper_bound) != length(truth)
+		) {
+			stop(
+				"interval_score: 'lower_bound' and 'upper_bound' must have the same length as 'truth'.",
+				call. = FALSE
+			)
+		}
+	}
+
 	if (!is.null(intervals)) {
 		intervals_idx <- which(purrr::map_lgl(intervals, ~ !is.null(.x)))
 		mis_intervals <- foreach::foreach(i = intervals_idx) %do%
@@ -298,7 +396,7 @@ interval_score_interval <- function(intervals, truth, alpha, na.rm = FALSE) {
 }
 
 
-#' Mean width of prediction intervals
+#' Mean Width of Prediction Intervals
 #' @description Computes the mean width of prediction intervals, defined as the average difference between upper and lower bounds.
 #' @param lower_bound A numeric vector of lower bounds of the prediction intervals.
 #' @param upper_bound A numeric vector of upper bounds of the prediction intervals.
@@ -360,6 +458,30 @@ interval_width <- function(
 	return_vector = FALSE,
 	na.rm = FALSE
 ) {
+	# Check: if both lower_bound/upper_bound and intervals are all NULL
+	if (is.null(intervals) && (is.null(lower_bound) || is.null(upper_bound))) {
+		stop(
+			"interval_width: Either 'intervals' or both 'lower_bound' and 'upper_bound' must be provided.",
+			call. = FALSE
+		)
+	}
+
+	# Check: when lower_bound and upper_bound are provided, they must be numeric and same length
+	if (!is.null(lower_bound) && !is.null(upper_bound)) {
+		if (!is.numeric(lower_bound)) {
+			stop("interval_width: 'lower_bound' must be numeric.", call. = FALSE)
+		}
+		if (!is.numeric(upper_bound)) {
+			stop("interval_width: 'upper_bound' must be numeric.", call. = FALSE)
+		}
+		if (length(lower_bound) != length(upper_bound)) {
+			stop(
+				"interval_width: 'lower_bound' and 'upper_bound' must have the same length.",
+				call. = FALSE
+			)
+		}
+	}
+
 	if (!is.null(intervals)) {
 		intervals_idx <- which(purrr::map_lgl(intervals, ~ !is.null(.x)))
 		width_intervals <- foreach::foreach(i = intervals_idx) %do%

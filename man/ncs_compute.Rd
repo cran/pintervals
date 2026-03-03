@@ -7,7 +7,7 @@
 ncs_compute(type, pred, truth, coefs = NULL)
 }
 \arguments{
-\item{type}{Type of non-conformity score to compute. Options include 'absolute_error', 'raw_error', 'relative_error', 'relative_error2', and 'heterogeneous_error'.}
+\item{type}{Type of non-conformity score to compute. Options include 'absolute_error', 'raw_error', 'relative_error', 'za_relative_error', and 'heterogeneous_error'.}
 
 \item{pred}{a numeric vector of predicted values}
 
@@ -18,3 +18,4 @@ ncs_compute(type, pred, truth, coefs = NULL)
 \description{
 Non-Conformity Score Computation Function
 }
+\keyword{internal}

@@ -2,7 +2,7 @@
 % Please edit documentation in R/helpers.R
 \name{bootstrap_inner}
 \alias{bootstrap_inner}
-\title{Bootstrap function for bootstrapping the prediction intervals}
+\title{Bootstrap Function for Bootstrapping the Prediction Intervals}
 \usage{
 bootstrap_inner(
   pred,
@@ -10,8 +10,6 @@ bootstrap_inner(
   error,
   nboot,
   alpha,
-  dw_bootstrap = FALSE,
-  distance_function = NULL,
   error_type = c("raw", "absolute"),
   distance_weighted_bootstrap = FALSE,
   distance_features_calib = NULL,
@@ -24,17 +22,13 @@ bootstrap_inner(
 \arguments{
 \item{pred}{predicted value}
 
-\item{calib}{a vector of true values of the calibration partition. Used when weighted_bootstrap is TRUE}
+\item{calib}{a vector of predicted values for the calibration partition}
 
-\item{error}{vector of errors.}
+\item{error}{vector of errors}
 
 \item{nboot}{number of bootstrap samples}
 
 \item{alpha}{confidence level}
-
-\item{dw_bootstrap}{logical. If TRUE, the bootstrap samples will be weighted according to the distance function}
-
-\item{distance_function}{a function that takes two numeric vectors and returns a numeric vector of distances. Default is NULL, in which case the absolute error will be used}
 
 \item{error_type}{The type of error to use for the prediction intervals. Can be 'raw' or 'absolute'. If 'raw', bootstrapping will be done on the raw prediction errors. If 'absolute', bootstrapping will be done on the absolute prediction errors with random signs. Default is 'raw'}
 
@@ -54,5 +48,6 @@ bootstrap_inner(
 a numeric vector with the predicted value and the lower and upper bounds of the prediction interval
 }
 \description{
-Bootstrap function for bootstrapping the prediction intervals
+Bootstrap Function for Bootstrapping the Prediction Intervals
 }
+\keyword{internal}

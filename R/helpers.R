@@ -1,8 +1,167 @@
+#' Validate distance weighting inputs
+#'
+#' Internal helper to validate distance-related arguments used across
+#' conformal, bootstrap, mondrian, ccp, and bccp functions.
+#'
+#' @param distance_features_calib Features for calibration set
+#' @param distance_features_pred Features for prediction set
+#' @param calib_length Expected number of calibration observations
+#' @param pred_length Expected number of prediction observations
+#' @param fn_name Name of the calling function, used in error messages
+#' @return NULL (called for side effects: stops on invalid input)
+#' @keywords internal
+validate_distance_inputs <- function(
+	distance_features_calib,
+	distance_features_pred,
+	calib_length,
+	pred_length,
+	fn_name = "pinterval"
+) {
+	if (is.null(distance_features_calib) || is.null(distance_features_pred)) {
+		stop(
+			fn_name,
+			": 'distance_features_calib' and 'distance_features_pred' must be provided for distance-weighted prediction.",
+			call. = FALSE
+		)
+	}
+	if (
+		!is.matrix(distance_features_calib) &&
+			!is.data.frame(distance_features_calib) &&
+			!is.numeric(distance_features_calib)
+	) {
+		stop(
+			fn_name,
+			": 'distance_features_calib' must be a matrix, data frame, or numeric vector.",
+			call. = FALSE
+		)
+	}
+	if (
+		!is.matrix(distance_features_pred) &&
+			!is.data.frame(distance_features_pred) &&
+			!is.numeric(distance_features_pred)
+	) {
+		stop(
+			fn_name,
+			": 'distance_features_pred' must be a matrix, data frame, or numeric vector.",
+			call. = FALSE
+		)
+	}
+	if (
+		is.numeric(distance_features_calib) &&
+			is.numeric(distance_features_pred) &&
+			!is.matrix(distance_features_calib) &&
+			!is.matrix(distance_features_pred)
+	) {
+		if (length(distance_features_calib) != calib_length) {
+			stop(
+				fn_name,
+				": 'distance_features_calib' must have the same length as the calibration set (got ",
+				length(distance_features_calib),
+				" vs ",
+				calib_length,
+				").",
+				call. = FALSE
+			)
+		}
+		if (length(distance_features_pred) != pred_length) {
+			stop(
+				fn_name,
+				": 'distance_features_pred' must have the same length as the prediction set (got ",
+				length(distance_features_pred),
+				" vs ",
+				pred_length,
+				").",
+				call. = FALSE
+			)
+		}
+	} else {
+		if (
+			(is.matrix(distance_features_calib) ||
+				is.data.frame(distance_features_calib)) &&
+				nrow(distance_features_calib) != calib_length
+		) {
+			stop(
+				fn_name,
+				": 'distance_features_calib' must have ",
+				calib_length,
+				" rows to match the calibration set (got ",
+				nrow(distance_features_calib),
+				").",
+				call. = FALSE
+			)
+		}
+		if (
+			(is.matrix(distance_features_pred) ||
+				is.data.frame(distance_features_pred)) &&
+				nrow(distance_features_pred) != pred_length
+		) {
+			stop(
+				fn_name,
+				": 'distance_features_pred' must have ",
+				pred_length,
+				" rows to match the prediction set (got ",
+				nrow(distance_features_pred),
+				").",
+				call. = FALSE
+			)
+		}
+		calib_nc <- if (
+			is.matrix(distance_features_calib) ||
+				is.data.frame(distance_features_calib)
+		) {
+			ncol(distance_features_calib)
+		} else {
+			1
+		}
+		pred_nc <- if (
+			is.matrix(distance_features_pred) || is.data.frame(distance_features_pred)
+		) {
+			ncol(distance_features_pred)
+		} else {
+			1
+		}
+		if (calib_nc != pred_nc) {
+			stop(
+				fn_name,
+				": 'distance_features_calib' and 'distance_features_pred' must have the same number of columns (got ",
+				calib_nc,
+				" and ",
+				pred_nc,
+				").",
+				call. = FALSE
+			)
+		}
+	}
+	invisible(NULL)
+}
+
+#' Resolve weight function from string or function
+#' @param weight_function A character string or function
+#' @return A weight function
+#' @keywords internal
+resolve_weight_function <- function(weight_function) {
+	if (is.function(weight_function)) {
+		return(weight_function)
+	}
+	weight_function <- match.arg(
+		weight_function,
+		c('gaussian_kernel', 'caucy_kernel', 'logistic', 'reciprocal_linear')
+	)
+	switch(
+		weight_function,
+		'gaussian_kernel' = gauss_kern,
+		'caucy_kernel' = cauchy_kern,
+		'logistic' = logistic_kern,
+		'reciprocal_linear' = reciprocal_linear_kern
+	)
+}
+
 #' Non-Conformity Score Computation Function
-#' @param type Type of non-conformity score to compute. Options include 'absolute_error', 'raw_error', 'relative_error', 'relative_error2', and 'heterogeneous_error'.
+#' @param type Type of non-conformity score to compute. Options include 'absolute_error', 'raw_error', 'relative_error', 'za_relative_error', and 'heterogeneous_error'.
 #' @param pred a numeric vector of predicted values
 #' @param truth a numeric vector of true values
 #' @param coefs a numeric vector of coefficients for the heterogeneous error model. Must be of length 2, where the first element is the intercept and the second element is the slope.
+#' @keywords internal
 ncs_compute <- function(type, pred, truth, coefs = NULL) {
 	if (type == 'absolute_error') {
 		return(abs_error(pred, truth))
@@ -14,17 +173,27 @@ ncs_compute <- function(type, pred, truth, coefs = NULL) {
 		return(za_rel_error(pred, truth))
 	} else if (type == 'heterogeneous_error') {
 		if (is.null(coefs)) {
-			stop('coefs must be provided for heterogeneous error')
+			stop(
+				"ncs_compute: 'coefs' must be provided for 'heterogeneous_error'.",
+				call. = FALSE
+			)
 		}
 		return(heterogeneous_error(pred, truth, coefs))
 	} else {
-		stop('Unknown non-conformity score type')
+		stop(
+			"ncs_compute: unknown non-conformity score type '",
+			type,
+			"'. ",
+			"Valid options are: 'absolute_error', 'raw_error', 'relative_error', 'za_relative_error', 'heterogeneous_error'.",
+			call. = FALSE
+		)
 	}
 }
 
 #' Gaussian Kernel Function
 #' @param d a numeric vector of distances
 #' @return a numeric vector of Gaussian kernel values
+#' @keywords internal
 gauss_kern <- function(d) {
 	return(exp(-d^2 / 2))
 }
@@ -32,6 +201,7 @@ gauss_kern <- function(d) {
 #' Cauchy Kernel Function
 #' @param d a numeric vector of distances
 #' @return a numeric vector of Cauchy kernel values
+#' @keywords internal
 cauchy_kern <- function(d) {
 	return(1 / (1 + d^2))
 }
@@ -39,13 +209,15 @@ cauchy_kern <- function(d) {
 #' Logistic Kernel Function
 #' @param d a numeric vector of distances
 #' @return a numeric vector of logistic kernel values
+#' @keywords internal
 logistic_kern <- function(d) {
-	return(1 / (1 + exp(d)))
+	return(stats::plogis(d, lower.tail = FALSE))
 }
 
 #' Reciprocal Linear Kernel Function
 #' @param d a numeric vector of distances
 #' @return a numeric vector of reciprocal linear kernel values
+#' @keywords internal
 reciprocal_linear_kern <- function(d) {
 	return(1 / (1 + d))
 }
@@ -58,6 +230,7 @@ reciprocal_linear_kern <- function(d) {
 #'
 #' @return a numeric vector of absolute errors
 #'
+#' @keywords internal
 abs_error <- function(pred, truth) {
 	return(abs(pred - truth))
 }
@@ -67,25 +240,34 @@ abs_error <- function(pred, truth) {
 #' @param pred a numeric vector of predicted values
 #' @param truth a numeric vector of true values
 #' @return a numeric vector of raw errors
+#' @keywords internal
 raw_error <- function(pred, truth) {
 	return(truth - pred)
 }
 
-#' Relative Error Function for Non-Conformity Scores by predicted Values
+#' Relative Error Function for Non-Conformity Scores by Predicted Values
 #'
 #' @param pred a numeric vector of predicted values
 #' @param truth a numeric vector of true values
 #'
 #' @return a numeric vector of relative errors
 #'
+#' @keywords internal
 rel_error <- function(pred, truth) {
+	if (any(pred == 0)) {
+		warning(
+			"rel_error: 'pred' contains zero values, which will produce Inf in relative error scores. Consider using 'za_relative_error' instead.",
+			call. = FALSE
+		)
+	}
 	return(abs((pred - truth) / pred))
 }
 
-#' Zero-adjusted Relative Error Function for Non-Conformity Scores by predicted Values with a small adjustment
+#' Zero-Adjusted Relative Error Function for Non-Conformity Scores by Predicted Values with a Small Adjustment
 #' @param pred a numeric vector of predicted values
 #' @param truth a numeric vector of true values
 #' @return a numeric vector of zero-adjusted relative errors
+#' @keywords internal
 za_rel_error <- function(pred, truth) {
 	return(abs((pred - truth) / (1 + pred)))
 }
@@ -95,16 +277,26 @@ za_rel_error <- function(pred, truth) {
 #' @param pred a numeric vector of predicted values
 #' @param truth a numeric vector of true values
 #' @param coefs a numeric vector of coefficients for the heterogeneous error model. Must be of length 2, where the first element is the intercept and the second element is the slope.
+#' @keywords internal
 heterogeneous_error <- function(pred, truth, coefs) {
 	if (length(coefs) != 2) {
-		stop('coefs must be a vector of length 2')
+		stop(
+			"heterogeneous_error: 'coefs' must be a vector of length 2.",
+			call. = FALSE
+		)
 	}
 
 	est_heterogeneous_error <- coefs[1] + coefs[2] * pred
+	if (any(est_heterogeneous_error <= 0)) {
+		warning(
+			"heterogeneous_error: estimated error scaling contains non-positive values, which may produce invalid non-conformity scores. Consider using a different 'ncs_type'.",
+			call. = FALSE
+		)
+	}
 	return(abs(pred - truth) / est_heterogeneous_error)
 }
 
-#' Grid search for lower and upper bounds of continuous conformal prediction intervals
+#' Grid Search for Lower and Upper Bounds of Continuous Conformal Prediction Intervals
 #'
 #' @param y_min minimum value to search
 #' @param y_max maximum value to search
@@ -125,6 +317,7 @@ heterogeneous_error <- function(pred, truth, coefs) {
 #'
 #' @return a tibble with the predicted values and the lower and upper bounds of the prediction intervals
 #'
+#' @keywords internal
 grid_finder <- function(
 	y_min,
 	y_max,
@@ -148,7 +341,10 @@ grid_finder <- function(
 		pos_vals <- seq(from = y_min, to = y_max, by = min_step)
 		if (length(pos_vals) > 10000) {
 			warning(
-				'Grid size with set step size is large, consider adjusting min_step or using grid_size instead of min_step if the search is too slow'
+				"grid_finder: grid size with set step size is large (",
+				length(pos_vals),
+				" points). Consider increasing 'resolution' or using 'grid_size' if the search is too slow.",
+				call. = FALSE
 			)
 		}
 	} else {
@@ -174,7 +370,7 @@ grid_finder <- function(
 	return(dplyr::bind_rows(out))
 }
 
-#' Inner function for grid search
+#' Inner Function for Grid Search
 #'
 #' @param hyp_ncs vector of hypothetical non-conformity scores
 #' @param y_hat predicted value
@@ -190,6 +386,7 @@ grid_finder <- function(
 #' @param weight_function a function to use for weighting the distances. Can be 'gaussian_kernel', 'caucy_kernel', 'logistic', or 'reciprocal_linear'. Default is 'gaussian_kernel'
 #'
 #' @return a numeric vector with the predicted value and the lower and upper bounds of the prediction interval
+#' @keywords internal
 grid_inner <- function(
 	hyp_ncs,
 	y_hat,
@@ -212,13 +409,29 @@ grid_inner <- function(
 				as.numeric(distance_features_pred)
 			)
 		} else if (distance_type == 'mahalanobis') {
+			cov_mat <- cov(distance_features_calib)
+			S_inv <- tryCatch(
+				solve(cov_mat),
+				error = function(e) {
+					stop(
+						"grid_inner: covariance matrix of 'distance_features_calib' is singular and cannot be inverted. ",
+						"Consider using 'distance_type = \"euclidean\"' or reducing feature dimensionality.",
+						call. = FALSE
+					)
+				}
+			)
 			distances <- row_mahalanobis_distance(
 				as.matrix(distance_features_calib),
 				as.numeric(distance_features_pred),
-				solve(cov(distance_features_calib))
+				S_inv
 			)
 		} else {
-			stop('Unknown distance type')
+			stop(
+				"grid_inner: unknown 'distance_type': '",
+				distance_type,
+				"'. Must be 'mahalanobis' or 'euclidean'.",
+				call. = FALSE
+			)
 		}
 
 		if (normalize_distance == 'minmax') {
@@ -338,18 +551,15 @@ grid_inner <- function(
 	}
 }
 
-#' Bootstrap function for bootstrapping the prediction intervals
+#' Bootstrap Function for Bootstrapping the Prediction Intervals
 #'
 #' @param pred predicted value
+#' @param calib a vector of predicted values for the calibration partition
 #' @param error vector of errors
 #' @param nboot number of bootstrap samples
 #' @param alpha confidence level
-#' @param error vector of errors.
-#' @param dw_bootstrap logical. If TRUE, the bootstrap samples will be weighted according to the distance function
-#' @param calib a vector of true values of the calibration partition. Used when weighted_bootstrap is TRUE
 #' @param error_type The type of error to use for the prediction intervals. Can be 'raw' or 'absolute'. If 'raw', bootstrapping will be done on the raw prediction errors. If 'absolute', bootstrapping will be done on the absolute prediction errors with random signs. Default is 'raw'
 #' @param distance_weighted_bootstrap logical. If TRUE, the bootstrap samples will be weighted according to the distance function
-#' @param distance_function a function that takes two numeric vectors and returns a numeric vector of distances. Default is NULL, in which case the absolute error will be used
 #' @param distance_features_calib a matrix of features for the calibration partition. Used when distance_weighted_bootstrap is TRUE
 #' @param distance_features_pred a matrix of features for the prediction partition. Used when distance_weighted_bootstrap is TRUE
 #' @param distance_type The type of distance metric to use when computing distances between calibration and prediction points. Options are 'mahalanobis' (default) and 'euclidean'.
@@ -357,14 +567,13 @@ grid_inner <- function(
 #' @param weight_function a function to use for weighting the distances. Can be 'gaussian_kernel', 'caucy_kernel', 'logistic', or 'reciprocal_linear'. Default is 'gaussian_kernel'
 #'
 #' @return a numeric vector with the predicted value and the lower and upper bounds of the prediction interval
+#' @keywords internal
 bootstrap_inner <- function(
 	pred,
 	calib,
 	error,
 	nboot,
 	alpha,
-	dw_bootstrap = FALSE,
-	distance_function = NULL,
 	error_type = c('raw', 'absolute'),
 	distance_weighted_bootstrap = FALSE,
 	distance_features_calib = NULL,
@@ -374,6 +583,11 @@ bootstrap_inner <- function(
 	weight_function = gauss_kern
 ) {
 	i <- NA
+
+	if (is.na(pred)) {
+		return(c(pred = NA_real_, lower_bound = NA_real_, upper_bound = NA_real_))
+	}
+
 	if (!distance_weighted_bootstrap) {
 		boot_error <- sample(error, size = nboot, replace = TRUE)
 	} else {
@@ -383,13 +597,29 @@ bootstrap_inner <- function(
 				as.numeric(distance_features_pred)
 			)
 		} else if (distance_type == 'mahalanobis') {
+			cov_mat <- cov(distance_features_calib)
+			S_inv <- tryCatch(
+				solve(cov_mat),
+				error = function(e) {
+					stop(
+						"bootstrap_inner: covariance matrix of 'distance_features_calib' is singular and cannot be inverted. ",
+						"Consider using 'distance_type = \"euclidean\"' or reducing feature dimensionality.",
+						call. = FALSE
+					)
+				}
+			)
 			distances <- row_mahalanobis_distance(
 				as.matrix(distance_features_calib),
 				as.numeric(distance_features_pred),
-				solve(cov(distance_features_calib))
+				S_inv
 			)
 		} else {
-			stop('Unknown distance type')
+			stop(
+				"bootstrap_inner: unknown 'distance_type': '",
+				distance_type,
+				"'. Must be 'mahalanobis' or 'euclidean'.",
+				call. = FALSE
+			)
 		}
 
 		if (normalize_distance == 'minmax') {
@@ -419,23 +649,41 @@ bootstrap_inner <- function(
 }
 
 
-#' Bin chopper function for binned bootstrapping
+#' Bin Chopper Function for Binned Bootstrapping
 #'
 #' @param x vector of values to be binned
 #' @param nbins number of bins
 #' @param return_breaks logical indicating whether to return the bin breaks
+#' @keywords internal
 bin_chopper <- function(x, nbins, return_breaks = FALSE) {
 	if (nbins < 2) {
-		stop('nbins must be greater than 1')
+		stop("bin_chopper: 'nbins' must be greater than 1.", call. = FALSE)
 	}
 	if (nbins > length(x)) {
-		stop('nbins must be less than or equal to the length of x')
+		stop(
+			"bin_chopper: 'nbins' (",
+			nbins,
+			") must be less than or equal to the length of 'x' (",
+			length(x),
+			").",
+			call. = FALSE
+		)
 	}
 	if (length(unique(x)) == 1) {
-		stop('x must have more than one unique value')
+		stop(
+			"bin_chopper: 'x' must have more than one unique value.",
+			call. = FALSE
+		)
 	}
 	if (length(unique(x)) < nbins) {
-		stop('x must have more unique values than nbins')
+		stop(
+			"bin_chopper: 'x' must have at least as many unique values as 'nbins' (got ",
+			length(unique(x)),
+			" unique values, ",
+			nbins,
+			" bins).",
+			call. = FALSE
+		)
 	}
 
 	target_num <- ceiling(length(x) / nbins)
@@ -490,10 +738,11 @@ bin_chopper <- function(x, nbins, return_breaks = FALSE) {
 }
 
 
-#' Bin-individual alpha function for conformal prediction
+#' Bin-Individual Alpha Function for Conformal Prediction
 #'
 #' @param minqs Minimum quantiles
 #' @param alpha alpha level
+#' @keywords internal
 bindividual_alpha <- function(minqs, alpha) {
 	a <- alpha
 	rem_bins <- sum(minqs >= a, na.rm = T)
@@ -507,9 +756,7 @@ bindividual_alpha <- function(minqs, alpha) {
 	rem_bins_old <- rem_bins + 1
 
 	while (rem_bins != rem_bins_old) {
-		if (
-			prod(minq_to_alpha(minqs[-which.min(minqs)], a), na.rm = T) <= alpha
-		) {
+		if (prod(minq_to_alpha(minqs[-which.min(minqs)], a), na.rm = T) <= alpha) {
 			minqs[which.min(minqs)] <- NA
 			rem_bins <- rem_bins - 1
 		}
@@ -525,19 +772,21 @@ bindividual_alpha <- function(minqs, alpha) {
 	return(list(power = rem_bins, bins = !is.na(minqs)))
 }
 
-#' Helper for minimum quantile to alpha function
+#' Helper for Minimum Quantile to Alpha Function
 #'
 #' @param minq minimum quantile
 #' @param alpha alpha level
+#' @keywords internal
 minq_to_alpha <- function(minq, alpha) {
 	minq[which(minq > alpha)] <- alpha
 	return(minq)
 }
 
-#' Flatten binned conformal prediction intervals to contiguous intervals
+#' Flatten Binned Conformal Prediction Intervals to Contiguous Intervals
 #'
 #' @param lst list of binned conformal prediction intervals
 #' @param contiguize logical indicating whether to contiguize the intervals
+#' @keywords internal
 flatten_cp_bin_intervals <- function(lst, contiguize = FALSE) {
 	i <- 'tmp'
 
@@ -587,13 +836,14 @@ flatten_cp_bin_intervals <- function(lst, contiguize = FALSE) {
 	}
 }
 
-#' Contiguize non-contiguous intervals
+#' Contiguize Non-Contiguous Intervals
 #'
 #' @param pot_lower_bounds Potential non-contiguous lower bounds
 #' @param pot_upper_bounds Potential non-contiguous upper bounds
 #' @param empirical_lower_bounds Observed lower bounds
 #' @param empirical_upper_bounds Observed upper bounds
 #' @param return_all Return all intervals or just contiguous intervals
+#' @keywords internal
 contiguize_intervals <- function(
 	pot_lower_bounds,
 	pot_upper_bounds,
@@ -648,7 +898,7 @@ contiguize_intervals <- function(
 	}
 }
 
-#' Function to optimize clusters based on the Calinski-Harabasz index
+#' Function to Optimize Clusters Based on the Calinski-Harabasz Index
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param method Clustering method to use, either 'ks' for Kolmogorov-Smirnov or 'kmeans' for K-means clustering
@@ -658,6 +908,7 @@ contiguize_intervals <- function(
 #' @param maxit Maximum number of iterations for the clustering algorithm
 #' @param q Quantiles to use for K-means clustering, default is a sequence from 0.1 to 0.9 in steps of 0.1
 #' @return A vector of cluster assignments, with attributes containing the clusters, coverage gaps, method used, number of clusters, and the Calinski-Harabasz index
+#' @keywords internal
 optimize_clusters <- function(
 	ncs,
 	class_vec,
@@ -700,7 +951,7 @@ optimize_clusters <- function(
 	return(clusters)
 }
 
-#' Function to cluster non-conformity scores using either Kolmogorov-Smirnov or K-means clustering
+#' Function to Cluster Non-Conformity Scores Using Either Kolmogorov-Smirnov or K-Means Clustering
 #' @param ncs Vector of non-conformity scores
 #' @param m Number of clusters to form
 #' @param class_vec Vector of class labels
@@ -709,6 +960,7 @@ optimize_clusters <- function(
 #' @param q Quantiles to use for K-means clustering, default is a sequence from 0.1 to 0.9 in steps of 0.1
 #' @param min_class_size Minimum number of observations required in a class to be included in clustering
 #' @return A vector of cluster assignments, with attributes containing the clusters, coverage gaps, method used, number of clusters, and Calibrated Clustering index
+#' @keywords internal
 clusterer <- function(
 	ncs,
 	m,
@@ -735,7 +987,12 @@ clusterer <- function(
 	} else if (method == 'kmeans') {
 		clusters <- kmeans_cluster_qecdf(ncs, class_vec, m = m, q = q)
 	} else {
-		stop('Unknown clustering method')
+		stop(
+			"clusterer: unknown clustering method '",
+			method,
+			"'. Must be 'ks' or 'kmeans'.",
+			call. = FALSE
+		)
 	}
 
 	coverage_gaps <- foreach::foreach(
@@ -765,10 +1022,11 @@ clusterer <- function(
 }
 
 
-#' Function to convert class vector to cluster vector based on calibrated clusters
+#' Function to Convert Class Vector to Cluster Vector Based on Calibrated Clusters
 #' @param class_vec Vector of class labels
 #' @param cluster_vec_calib Vector of calibrated clusters
 #' @return A vector of cluster assignments, with attributes containing the clusters, method used, number of clusters, Calibrated Clustering index, and coverage gaps
+#' @keywords internal
 class_to_clusters <- function(class_vec, cluster_vec_calib) {
 	i <- NULL
 
@@ -789,23 +1047,31 @@ class_to_clusters <- function(class_vec, cluster_vec_calib) {
 	return(cluster_vec)
 }
 
-#' Function to perform Kolmogorov-Smirnov clustering on non-conformity scores
+#' Function to Perform Kolmogorov-Smirnov Clustering on Non-Conformity Scores
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param m Number of clusters to form
 #' @param maxit Maximum number of iterations for the clustering algorithm
 #' @param nrep Number of repetitions for the clustering algorithm
 #' @return A vector of cluster assignments, with attributes containing the clusters, coverage gaps, method used, number of clusters, and Calibrated Clustering index
+#' @keywords internal
 ks_cluster <- function(ncs, class_vec, m, maxit = 100, nrep = 10) {
 	r <- NULL
 	class_labels <- unique(class_vec)
 
 	if (m < 2) {
-		stop('m must be greater than or equal to 2')
+		stop("ks_cluster: 'm' must be greater than or equal to 2.", call. = FALSE)
 	}
 
 	if (length(class_labels) < m) {
-		stop('Number of classes must be greater than or equal to m')
+		stop(
+			"ks_cluster: number of unique classes (",
+			length(class_labels),
+			") must be greater than or equal to 'm' (",
+			m,
+			").",
+			call. = FALSE
+		)
 	}
 
 	ch_score <- 0
@@ -828,7 +1094,10 @@ ks_cluster <- function(ncs, class_vec, m, maxit = 100, nrep = 10) {
 			}
 			if (i == maxit) {
 				warning(
-					'Maximum number of iterations reached without convergence'
+					"ks_cluster: maximum number of iterations (",
+					maxit,
+					") reached without convergence.",
+					call. = FALSE
 				)
 			}
 		}
@@ -844,10 +1113,11 @@ ks_cluster <- function(ncs, class_vec, m, maxit = 100, nrep = 10) {
 }
 
 
-#' Function to initialize clusters for Kolmogorov-Smirnov clustering
+#' Function to Initialize Clusters for Kolmogorov-Smirnov Clustering
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param m Number of clusters to form
+#' @keywords internal
 ks_cluster_init_step <- function(ncs, class_vec, m) {
 	j <- i <- NULL
 
@@ -875,13 +1145,14 @@ ks_cluster_init_step <- function(ncs, class_vec, m) {
 	return(clusters)
 }
 
-#' Function to assign classes to clusters based on Kolmogorov-Smirnov clustering
+#' Function to Assign Classes to Clusters Based on Kolmogorov-Smirnov Clustering
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param class_labels Vector of unique class labels
 #' @param clusters List of clusters
 #' @param m Number of clusters
 #' @return A list of clusters, where each element is a vector of class labels assigned to that cluster
+#' @keywords internal
 ks_cluster_assignment_step <- function(
 	ncs,
 	class_vec,
@@ -908,13 +1179,14 @@ ks_cluster_assignment_step <- function(
 	return(split(class_labels, cluster_vec))
 }
 
-#' Function to find the minimum distance between a class and a set of clusters
+#' Function to Find the Minimum Distance Between a Class and a Set of Clusters
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param class Class label to compare against the clusters
 #' @param clusters List of clusters
 #' @param return Character string indicating what to return. Options are 'min' for the minimum distance, 'which.min' for the index of the cluster with the minimum distance, or 'vec' for a vector of distances to each cluster.
 #' @return A numeric value or vector depending on the value of the `return` parameter. If `return` is 'min', returns the minimum distance. If `return` is 'which.min', returns the index of the cluster with the minimum distance. If `return` is 'vec', returns a vector of distances to each cluster.
+#' @keywords internal
 Dm_finder <- function(
 	ncs,
 	class_vec,
@@ -949,21 +1221,23 @@ Dm_finder <- function(
 	}
 }
 
-#' Function to convert distance measure to probability
+#' Function to Convert Distance Measure to Probability
 #' @param dm Distance measure
 #' @param dms Vector of distance measures for all clusters
 #' @return A numeric value representing the probability of the distance measure relative to the sum of all distance measures
+#' @keywords internal
 dm_to_prob <- function(dm, dms) {
 	dm / sum(dms)
 }
 
 
-#' Function to perform K-means clustering on quantile empirical cumulative distribution functions (qECDFs) of non-conformity scores
+#' Function to Perform K-Means Clustering on Quantile Empirical Cumulative Distribution Functions (qECDFs) of Non-Conformity Scores
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param q Quantiles to use for the qECDFs, default is a sequence from 0.1 to 0.9 in steps of 0.1
 #' @param m Number of clusters to form
 #' @return A list of clusters, where each element is a vector of class labels assigned to that cluster
+#' @keywords internal
 kmeans_cluster_qecdf <- function(
 	ncs,
 	class_vec,
@@ -987,11 +1261,12 @@ kmeans_cluster_qecdf <- function(
 	return(split(class_labels, clusters_kmeans))
 }
 
-#' Function to find the coverage gap for a set of clusters
+#' Function to Find the Coverage Gap for a Set of Clusters
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param cluster Vector of cluster labels
 #' @return A numeric value representing the maximum coverage gap between the clusters
+#' @keywords internal
 coverage_gap_finder <- function(ncs, class_vec, cluster) {
 	if (length(cluster) == 1) {
 		return(0)
@@ -1012,12 +1287,13 @@ coverage_gap_finder <- function(ncs, class_vec, cluster) {
 	}
 }
 
-#' Function to compute the Calinski-Harabasz index for a set of clusters
+#' Function to Compute the Calinski-Harabasz Index for a Set of Clusters
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param clusters List of clusters, where each element is a vector of class labels assigned to that cluster
 #' @param q Quantiles to use for the qECDFs, default is a sequence from 0.1 to 0.9 in steps of 0.1
 #' @return A numeric value representing the Calinski-Harabasz index for the clusters
+#' @keywords internal
 ch_index <- function(ncs, class_vec, clusters, q = seq(0.1, 0.9, by = 0.1)) {
 	if (length(clusters) == 1) {
 		return(0)
@@ -1042,12 +1318,13 @@ ch_index <- function(ncs, class_vec, clusters, q = seq(0.1, 0.9, by = 0.1)) {
 }
 
 
-#' Function to compute the within-cluster sum of squares (WCSS) for a set of clusters
+#' Function to Compute the Within-Cluster Sum of Squares (WCSS) for a Set of Clusters
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param cluster Vector of cluster labels
 #' @param q Quantiles to use for the qECDFs, default is a sequence from 0.1 to 0.9 in steps of 0.1
 #' @return A numeric value representing the WCSS for the cluster
+#' @keywords internal
 wcss_compute <- function(ncs, class_vec, cluster, q = seq(0.1, 0.9, by = 0.1)) {
 	i <- NULL
 	qs <- foreach::foreach(
@@ -1065,12 +1342,13 @@ wcss_compute <- function(ncs, class_vec, cluster, q = seq(0.1, 0.9, by = 0.1)) {
 	return(sum((t(qs) - mean_qs)^2, na.rm = TRUE))
 }
 
-#' Function to compute the between-cluster sum of squares (BCSS) for a set of clusters
+#' Function to Compute the Between-Cluster Sum of Squares (BCSS) for a Set of Clusters
 #' @param ncs Vector of non-conformity scores
 #' @param class_vec Vector of class labels
 #' @param clusters List of clusters, where each element is a vector of class labels assigned to that cluster
 #' @param q Quantiles to use for the qECDFs, default is a sequence from 0.1 to 0.9 in steps of 0.1
 #' @return A numeric value representing the BCSS for the clusters
+#' @keywords internal
 bcss_compute <- function(
 	ncs,
 	class_vec,

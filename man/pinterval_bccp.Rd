@@ -2,7 +2,7 @@
 % Please edit documentation in R/pinterval_bccp.R
 \name{pinterval_bccp}
 \alias{pinterval_bccp}
-\title{Bin-conditional conformal prediction intervals for continuous predictions}
+\title{Bin-Conditional Conformal Prediction Intervals for Continuous Predictions}
 \usage{
 pinterval_bccp(
   pred,
@@ -20,7 +20,7 @@ pinterval_bccp(
   distance_weighted_cp = FALSE,
   distance_features_calib = NULL,
   distance_features_pred = NULL,
-  normalize_distance = TRUE,
+  normalize_distance = "none",
   distance_type = c("mahalanobis", "euclidean"),
   weight_function = c("gaussian_kernel", "caucy_kernel", "logistic", "reciprocal_linear")
 )

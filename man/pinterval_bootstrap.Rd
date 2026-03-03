@@ -2,7 +2,7 @@
 % Please edit documentation in R/pinterval_bootstrap.R
 \name{pinterval_bootstrap}
 \alias{pinterval_bootstrap}
-\title{Bootstrap prediction intervals}
+\title{Bootstrap Prediction Intervals}
 \usage{
 pinterval_bootstrap(
   pred,
@@ -15,7 +15,7 @@ pinterval_bootstrap(
   distance_features_calib = NULL,
   distance_features_pred = NULL,
   distance_type = c("mahalanobis", "euclidean"),
-  normalize_distance = TRUE,
+  normalize_distance = "none",
   weight_function = c("gaussian_kernel", "caucy_kernel", "logistic", "reciprocal_linear")
 )
 }
