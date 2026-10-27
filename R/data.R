@@ -40,7 +40,7 @@
 #'   \item{state}{State name.}
 #'   \item{county}{County name.}
 #'   \item{fips}{County FIPS code.}
-#'   \item{turnout}{Observed turnout (proportion). Calculated as total votes cast divided by total population (not voting-age population).}
+#'   \item{turnout}{Observed turnout (proportion). Total presidential votes cast divided by the county Citizen Voting-Age Population (CVAP) from the 2012--2016 ACS special tabulation. (Earlier versions of this help page described the denominator as total population; that was incorrect -- see NEWS for 1.3.0.)}
 #'   \item{total_population}{Total county population.}
 #'   \item{nonwhite_pct}{Percent non-white population.}
 #'   \item{foreignborn_pct}{Percent foreign-born population.}
@@ -62,7 +62,15 @@
 #' }
 #'
 #' @details
-#' The dataset is based on the MIT Election Lab "2018 Election Analysis dataset" file, with four additions: (1) `turnout`, calculated as the number of votes cast divided by the total population, (2) `geo_group`, a coarse geographic grouping variable for the counties, (3) county centroid coordinates (`longitude`, `latitude`), and (4) `predicted_turnout`.
+#' \strong{Superseded.} This single-election (2016) cross-section is retained for
+#' backward compatibility and is still used by the package vignette and examples.
+#' For new work spanning multiple elections, prefer \code{\link{county_turnout_panel}},
+#' a five-wave (2008--2024) county panel whose covariates are pulled directly from
+#' the U.S. Census Bureau API. \code{county_turnout_panel$turnout} uses the same
+#' votes / Citizen Voting-Age Population definition as \code{county_turnout$turnout}
+#' and reproduces its 2016 values for all but a handful of counties (see NEWS 1.3.0).
+#'
+#' The dataset is based on the MIT Election Lab "2018 Election Analysis dataset" file, with four additions: (1) `turnout`, calculated as the number of presidential votes cast divided by the Citizen Voting-Age Population, (2) `geo_group`, a coarse geographic grouping variable for the counties, (3) county centroid coordinates (`longitude`, `latitude`), and (4) `predicted_turnout`.
 #' The variable `predicted_turnout` is generated using leave-one-out
 #' cross-validation (LOO-CV). For each county a random forest
 #' model is fit on the remaining counties with `turnout` as the outcome
@@ -78,19 +86,19 @@
 #' library(foreach)
 #' library(pintervals)
 #'
-#' dat <- county_turnout  # replace with your object name
+#' data("county_turnout", package = "pintervals")
 #'
 #' # Choose predictors: all numeric covariates except turnout + geographic/id vars
-#' dat2 <- dat \code{|>}
-#'  select(-c(state, county, fips, division, region, geo_group, longitude, latitude))
+#' model_data <- county_turnout \code{\%>\%}
+#' select(-c(state, county, fips, division, region, geo_group, longitude, latitude))
 #'
 #' set.seed(101010) # The meaning of life in binary
 #'
-#' pred_loo <- foreach(.i = seq_len(nrow(dat)),
-#'                     .final = unlist) %do% \{
+#' pred_loo <- foreach(.i = seq_len(nrow(county_turnout)),
+#'                     .final = unlist) \%do\% \{
 #'
-#' train <- dat2[-.i, , drop = FALSE]
-#'   test  <- dat2[ .i, , drop = FALSE]
+#' train <- model_data[-.i, , drop = FALSE]
+#' test  <- model_data[ .i, , drop = FALSE]
 #'
 #'   fit <- ranger(
 #'     formula = turnout ~ .,
@@ -102,7 +110,7 @@
 #' \}
 #'
 #'
-#' dat <- dat \code{|>} mutate(predicted_turnout = pred_loo)
+#' county_turnout <- county_turnout \code{\%>\%} mutate(predicted_turnout = pred_loo)
 #'
 #'
 #' @source
@@ -115,3 +123,135 @@
 #'
 #' @keywords datasets
 "county_turnout"
+
+#' U.S. County-Level Presidential Turnout and Demographic Context, 2008-2024 Panel
+#'
+#' @description
+#' A tidy panel of U.S. county-level presidential-election voter turnout and
+#' sociodemographic context for the five presidential elections of 2008, 2012,
+#' 2016, 2020 and 2024. One row per county (county-equivalent) per election year.
+#' This is the multi-election generalisation of \code{\link{county_turnout}}; every covariate
+#' is re-derived directly from the U.S. Census Bureau API.
+#'
+#' @format A tibble with 15,543 rows and 38 variables:
+#' \describe{
+#'   \item{state}{State name (or "District of Columbia").}
+#'   \item{county}{County / county-equivalent name (trailing " County"/" Parish" removed). Not unique on its own; pair with \code{fips}.}
+#'   \item{fips}{5-character county FIPS code, stored as a character string with leading zeros (e.g. \code{"01001"}). (In \code{county_turnout} this column is numeric.)}
+#'   \item{election_year}{Presidential election year: 2008, 2012, 2016, 2020 or 2024. Panel key together with \code{fips}.}
+#'   \item{turnout}{Turnout rate = \code{total_votes / cvap}, using the same definition as \code{county_turnout$turnout}. Always \eqn{\le 1} where present: 25 micro-county-years whose recorded ballots exceeded the noisy 5-year ACS CVAP estimate (turnout > 1) have been \strong{dropped} from the panel. \code{NA} for 14 rows (Kalawao Co., HI in every wave; the 9 Connecticut planning regions in 2024) - these are \strong{retained}.}
+#'   \item{total_votes}{Total presidential ballots cast (MEDSL), integer. Turnout numerator. \code{NA} on the 14 rows with no MEDSL match.}
+#'   \item{cvap}{Citizen Voting-Age Population (U.S. Census Bureau CVAP special tabulation, matched ACS 5-year window), integer. Turnout denominator.}
+#'   \item{votes_dem}{Presidential ballots for the Democratic candidate (MEDSL), integer.}
+#'   \item{votes_rep}{Presidential ballots for the Republican candidate (MEDSL), integer.}
+#'   \item{votes_other}{Presidential ballots for all other candidates combined - Libertarian, Green, other minor parties and recorded write-ins (MEDSL), integer. MEDSL only breaks out Libertarian/Green in some waves, so they are pooled here for a consistent panel.}
+#'   \item{dem_share}{\code{votes_dem / total_votes}, computed from the rounded integer counts.}
+#'   \item{rep_share}{\code{votes_rep / total_votes}.}
+#'   \item{other_share}{\code{votes_other / total_votes}. \code{dem_share + rep_share + other_share} is 1 up to rounding, except for 13 tiny 2024 counties (DC + Vermont towns) where upstream MEDSL sub-totals disagree by a few hundred ballots.}
+#'   \item{turnout_county_mean}{Per-election aggregate (constant within \code{election_year}): unweighted mean of county \code{turnout} across all counties with data for that wave (computed \emph{before} the turnout > 1 rows are dropped, so it reflects the full electorate).}
+#'   \item{turnout_electorate}{Per-election aggregate: the "true" electorate-wide turnout for the wave = \eqn{\sum \texttt{total\_votes} / \sum \texttt{cvap}} over all counties with data.}
+#'   \item{dem_share_county_mean}{Per-election aggregate: unweighted mean of county \code{dem_share}.}
+#'   \item{dem_share_electorate}{Per-election aggregate: electorate-wide Democratic share = \eqn{\sum \texttt{votes\_dem} / \sum \texttt{total\_votes}} (reproduces the national popular-vote share to a fraction of a point).}
+#'   \item{rep_share_county_mean}{Per-election aggregate: unweighted mean of county \code{rep_share}.}
+#'   \item{rep_share_electorate}{Per-election aggregate: electorate-wide Republican share.}
+#'   \item{other_share_county_mean}{Per-election aggregate: unweighted mean of county \code{other_share}.}
+#'   \item{other_share_electorate}{Per-election aggregate: electorate-wide other-candidate share.}
+#'   \item{total_population}{Total resident population (ACS table B01003), integer.}
+#'   \item{nonwhite_pct}{Percent not non-Hispanic White (from ACS B03002).}
+#'   \item{foreignborn_pct}{Percent foreign-born (ACS B05002).}
+#'   \item{female_pct}{Percent female (ACS B01001).}
+#'   \item{age29andunder_pct}{Percent aged 29 or younger (ACS B01001).}
+#'   \item{age65andolder_pct}{Percent aged 65 or older (ACS B01001).}
+#'   \item{median_hh_inc}{Median household income, inflation-adjusted to the ACS window's final year (ACS B19013), integer. \code{NA} for 2 Census-suppressed micro-county rows.}
+#'   \item{clf_unemploy_pct}{Unemployed as a percent of the civilian labor force (ACS B23025; B23001 for the 2008 wave).}
+#'   \item{lesscollege_pct}{Percent of the population 25+ with less than a bachelor's degree (ACS B15003; B15002 for the 2008 wave).}
+#'   \item{lesshs_pct}{Percent of the population 25+ with less than a high-school diploma (ACS B15003; B15002 for the 2008 wave).}
+#'   \item{rural_pct}{Percent of population classified rural by the nearest decennial census (table P2): 2010 census for the 2008/2012/2016 waves, 2020 census for the 2020/2024 waves. Held fixed across waves that share a census. \code{NA} for the 9 Connecticut planning regions in 2024.}
+#'   \item{ruralurban_cc}{USDA ERS Rural-Urban Continuum Code (integer 1-9; lower = more metropolitan). Vintage reused across adjacent elections: 2003 -> 2008; 2013 -> 2012 & 2016; 2023 -> 2020 & 2024.}
+#'   \item{division}{U.S. Census Bureau division (factor, 9 levels). State-level; inherited from \code{county_turnout}.}
+#'   \item{region}{U.S. Census Bureau region (factor, 4 levels). State-level; inherited from \code{county_turnout}.}
+#'   \item{geo_group}{Coarse \code{pintervals}-specific state grouping (factor, 15 levels). Inherited from \code{county_turnout}.}
+#'   \item{longitude}{County internal-point (approximate centroid) longitude, decimal degrees (Census Gazetteer).}
+#'   \item{latitude}{County internal-point latitude, decimal degrees (Census Gazetteer).}
+#' }
+#'
+#' @details
+#' Each covariate is matched to the ACS 5-year vintage whose window ends nearest
+#' the election: 2006-2010 (2008), 2008-2012 (2012), 2012-2016 (2016),
+#' 2016-2020 (2020), 2020-2024 (2024).
+#'
+#' \strong{Coverage.} 50 states + DC. \strong{Alaska is excluded} - MEDSL reports
+#' Alaska by state-house district, not by borough, so no borough-level
+#' presidential returns exist (the original \code{county_turnout} also omits
+#' Alaska). Island territories are excluded (no presidential electors).
+#'
+#' \strong{Votes by party.} \code{votes_dem}, \code{votes_rep} and
+#' \code{votes_other} are the MEDSL county presidential returns collapsed to three
+#' groups. MEDSL breaks 2008-2016 into Democrat / Republican / Other only; 2020
+#' adds Green and Libertarian and 2024 adds Libertarian, all of which are folded
+#' into \code{votes_other} so the split is consistent across waves. Where a county
+#' reports by voting mode with no total row, the mode rows are summed;
+#' administrative "TOTAL VOTES CAST" / "UNDERVOTES" style rows carried in the 2024
+#' file are dropped. The three columns sum to \code{total_votes} exactly for
+#' 2008-2020 and for all but 13 tiny 2024 counties.
+#'
+#' \strong{Per-election aggregates.} The eight \code{*_county_mean} /
+#' \code{*_electorate} columns are constant within an \code{election_year} and are
+#' computed over every county with data for that wave, \emph{before} the
+#' turnout > 1 rows are dropped. \code{*_county_mean} is the unweighted mean
+#' across counties; \code{*_electorate} is the pooled ratio
+#' (\eqn{\sum} numerator / \eqn{\sum} denominator) - the "true" per-election
+#' turnout and vote shares for the whole electorate.
+#'
+#' \strong{ACS covariates are pulled directly from the U.S. Census Bureau API,
+#' not via IPUMS NHGIS.} NHGIS's terms of use prohibit redistributing extracted
+#' data outside narrow journal exceptions, so ACS data obtained through NHGIS
+#' cannot be bundled in a CRAN package; the identical ACS detailed tables from
+#' the Census Bureau's own API are a U.S. Government work in the public domain.
+#' The reconstruction was validated against \code{county_turnout} (which is built
+#' from an NHGIS-sourced file): for the 2012-2016 ACS vintage all ten shared
+#' covariates match to floating-point tolerance across all 3,107 shared counties.
+#'
+#' \strong{Geography / FIPS harmonisation.} Geography is kept native to each wave
+#' (the matched ACS county list is the spine). Documented handling of known
+#' changes in the window:
+#' \itemize{
+#'   \item \emph{Shannon County, SD (46113) -> Oglala Lakota County, SD (46102), 2015}: sources still using 46113 (MEDSL, RUCC 2013, 2010 census) are recoded to 46102 for the 2016/2020/2024 waves; 2008/2012 use 46113.
+#'   \item \emph{Bedford (independent) city, VA (51515) -> Bedford County, VA (51019), 2013}: separate row in 2008/2012 (native); folded into 51019 for 2016; 51019 only thereafter.
+#'   \item \emph{Valdez-Cordova Census Area, AK split (2019)} and \emph{Wade Hampton -> Kusilvak, AK (2015)}: Alaska is excluded, so these are noted only for completeness.
+#'   \item \emph{Connecticut: 8 counties -> 9 planning regions (2022-vintage products)}: kept native per wave - the 2008-2020 waves use the 8 legacy counties (09001-09015), the 2024 wave uses the 9 planning regions (09110-09190). Connecticut is therefore not a consistent 5-wave panel: 2024 \code{turnout} and \code{rural_pct} are \code{NA} for the planning regions, and CT's 2020 \code{ruralurban_cc} is taken from RUCC 2013 (legacy counties).
+#'   \item \emph{Kansas City, MO} reports as its own unit (FIPS 2938000; mis-coded 36000 in the 2024 MEDSL file); its ballots - total and by party - are redistributed to Cass/Clay/Jackson/Platte counties by each county's share of the Kansas City place population from the nearest decennial census.
+#' }
+#' Native geography per wave is 3114 / 3114 / 3113 / 3113 / 3114 county-equivalents
+#' for 2008 / 2012 / 2016 / 2020 / 2024 (the Bedford (2016) and Connecticut (2024)
+#' changes above); after dropping the 6 / 3 / 4 / 6 / 6 county-years with
+#' turnout > 1, the shipped per-year row counts are
+#' 3108 / 3111 / 3109 / 3107 / 3108.
+#'
+#' \strong{Rurality-code vintage caveat.} USDA ERS revises the Rural-Urban
+#' Continuum roughly once per decade, so \code{ruralurban_cc} is shared by the
+#' 2012 & 2016 waves (2013 codes) and by the 2020 & 2024 waves (2023 codes).
+#'
+#' A full variable-by-variable codebook is installed with the package at
+#' \code{system.file("extdata", "county_turnout_panel_codebook.md", package = "pintervals")}.
+#' The dataset is rebuilt end-to-end by \code{data-raw/county_turnout_panel.R};
+#' see \code{data-raw/README.md} for the exact upstream citations and the
+#' regeneration procedure.
+#'
+#' @source
+#' \itemize{
+#'   \item \strong{Turnout numerator and votes by party}: MEDSL, "County Presidential Election Returns 2000-2024", Harvard Dataverse, \doi{10.7910/DVN/VOQCHQ}. License: \strong{CC0 1.0}.
+#'   \item \strong{Turnout denominator}: U.S. Census Bureau, Citizen Voting-Age Population (CVAP) Special Tabulation from the ACS, \url{https://www.census.gov/programs-surveys/decennial-census/about/voting-rights/cvap.html}. \strong{Public domain} (U.S. Government work).
+#'   \item \strong{Demographic covariates}: U.S. Census Bureau, American Community Survey 5-year estimates (detailed tables B01001, B01003, B03002, B05002, B15002/B15003, B19013, B23001/B23025), obtained directly from the Census Bureau API (\url{https://www.census.gov/data/developers/data-sets/acs-5year.html}). \strong{Public domain}. Deliberately not obtained via IPUMS NHGIS, to comply with NHGIS's non-redistribution terms.
+#'   \item \strong{rural_pct}: U.S. Census Bureau, decennial census table P2 (Urban and Rural), 2010 and 2020, via the Census Bureau API. \strong{Public domain}.
+#'   \item \strong{ruralurban_cc}: USDA Economic Research Service, Rural-Urban Continuum Codes (2003, 2013, 2023 releases), \url{https://www.ers.usda.gov/data-products/rural-urban-continuum-codes/}. \strong{Public domain} (U.S. Government work).
+#'   \item \strong{longitude / latitude}: U.S. Census Bureau Gazetteer Files, \url{https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html}. \strong{Public domain}.
+#'   \item \strong{division / region / geo_group}: inherited verbatim from \code{pintervals::county_turnout} (U.S. Census Bureau regions and divisions; \code{geo_group} is a \code{pintervals} addition).
+#' }
+#'
+#' @seealso \code{\link{county_turnout}} for the original single-election cross-section.
+#'
+#' @usage data(county_turnout_panel)
+#'
+#' @keywords datasets
+"county_turnout_panel"
